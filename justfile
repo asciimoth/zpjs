@@ -1,6 +1,6 @@
 set dotenv-load
 
-js_files := "src tests examples package.json tsconfig.json tsconfig.test.json biome.json"
+js_files := "src tests scripts examples package.json tsconfig.json tsconfig.test.json biome.json"
 
 default:
     @just --list
@@ -67,8 +67,8 @@ check-nix:
     nix flake check
 
 # Build and inspect the npm package without publishing it.
-pack: check-js
-    npm pack --ignore-scripts
+pack:
+    npm pack
 
 # Create a commit with a Conventional Commits message.
 commit:
