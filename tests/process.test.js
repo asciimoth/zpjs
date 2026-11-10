@@ -247,6 +247,81 @@ test("a malformed child cannot corrupt other task reports", async () => {
   );
 });
 
+for (const nameSize of [40, 120]) {
+  test(`partial and malformed child reports retain the last valid tree (${nameSize})`, async () => {
+    // Build wire bytes independently of the library encoder. IPC confirms that
+    // each write has finished before the parent collects the private pipe.
+    const source = `
+      import {writeSync} from 'node:fs';
+      const fd=Number(process.env.ZIG_PROGRESS);
+      const packet=Buffer.alloc(1+9+${nameSize});
+      packet[0]=1;
+      packet.writeUInt32LE(1,1);
+      packet.write('child',9);
+      packet[packet.length-1]=255;
+      writeSync(fd,packet);
+      packet.writeUInt32LE(2,1);
+      writeSync(fd,packet.subarray(0,11));
+      process.send('partial');
+      process.on('message',message=>{
+        if(message==='finish') {
+          writeSync(fd,packet.subarray(11));
+          process.send('complete');
+        } else {
+          const bad=Buffer.from(packet);
+          bad[bad.length-1]=0; // The root cannot be its own parent.
+          packet.writeUInt32LE(3,1);
+          writeSync(fd,Buffer.concat([bad,packet]));
+          process.send('bad');
+          process.disconnect();
+        }
+      });
+    `;
+    const { frames } = await run(
+      `
+      const p=new Progress({name:'parent',refreshInterval:null,nameSize:${nameSize}});
+      const task=p.root.start('placeholder');
+      const other=p.root.start('other');
+      const child=task.spawn(process.execPath,['--input-type=module','-e',${JSON.stringify(source)}],{
+        stdio:['ignore','ignore','inherit','ipc'],
+      });
+      const closed=once(child,'close');
+      try {
+        assert.equal((await once(child,'message'))[0],'partial');
+        p.flush();
+        child.send('finish');
+        assert.equal((await once(child,'message'))[0],'complete');
+        p.flush();
+        child.send('bad');
+        assert.equal((await once(child,'message'))[0],'bad');
+        other.completeOne();p.flush();
+        assert.equal((await closed)[0],0);
+        other.completeOne();p.flush();
+      } finally {child.kill();p.close();}
+    `,
+      { nameSize },
+    );
+    assert.deepEqual(
+      frames.map((frame) => frame[1].completed),
+      [1, 2, 2, 2],
+    );
+    assert.deepEqual(
+      frames.map((frame) => frame[2].completed),
+      [0, 0, 1, 2],
+    );
+    for (const frame of frames) {
+      assert.deepEqual(
+        frame.map((node) => node.name),
+        ["parent", "child", "other"],
+      );
+      assert.deepEqual(
+        frame.map((node) => node.parent),
+        [255, 0, 0],
+      );
+    }
+  });
+}
+
 test("local tasks take priority when a child tree exceeds capacity", async () => {
   const { frames } = await run(`
     const p=new Progress({name:'parent',refreshInterval:null});
