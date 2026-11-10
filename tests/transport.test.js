@@ -56,8 +56,53 @@ for (const code of ["EAGAIN", "EWOULDBLOCK", "EINTR"]) {
     `);
     assert.deepEqual(
       frames.map((f) => f[0].name),
-      ["first", "latest", "latest"],
+      ["first", "latest"],
     );
+  });
+}
+
+test("short writes finish an unchanged snapshot without starting it again", async () => {
+  const { frames } = await run(`
+    import fs from 'node:fs';
+    const write=fs.writeSync;
+    const p=new Progress({name:'unchanged',refreshInterval:null});
+    try {
+      fs.writeSync=(fd,buffer,offset,length)=>write(fd,buffer,offset,Math.min(length,13));
+      let sent=false;
+      for(let attempt=0;attempt<20;attempt++) {
+        if(p.flush()){sent=true;break;}
+      }
+      assert.equal(sent,true,'a completed snapshot must make flush return true');
+    } finally {
+      fs.writeSync=write;p.close();
+    }
+  `);
+  assert.deepEqual(frames, [
+    [{ name: "unchanged", parent: 255, completed: 0, total: 0 }],
+  ]);
+});
+
+for (const blocked of [false, true]) {
+  test(`close avoids a partial duplicate (blocked repeat: ${blocked})`, async () => {
+    const { frames } = await run(`
+    import fs from 'node:fs';
+    const write=fs.writeSync;
+    const p=new Progress({name:'delivered',refreshInterval:null});
+    assert.equal(p.flush(),true);
+    try {
+      if(${blocked}) {
+        fs.writeSync=()=>{throw Object.assign(new Error(),{code:'EAGAIN'})};
+        assert.equal(p.flush(),false);
+      }
+      fs.writeSync=(fd,buffer,offset,length)=>write(fd,buffer,offset,Math.min(length,13));
+      p.close();
+    } finally {
+      fs.writeSync=write;p.close();
+    }
+  `);
+    assert.deepEqual(frames, [
+      [{ name: "delivered", parent: 255, completed: 0, total: 0 }],
+    ]);
   });
 }
 

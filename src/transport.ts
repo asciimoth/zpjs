@@ -14,6 +14,7 @@ export function environmentFd(value: string | undefined): number | undefined {
 export class Transport {
   #socket: Socket;
   #pending: Buffer | undefined;
+  #lastSent: Buffer | undefined;
   #offset = 0;
   #closed = false;
 
@@ -49,10 +50,20 @@ export class Transport {
     return !this.#closed;
   }
 
-  send(packet: Buffer): boolean {
+  send(packet: Buffer, final = false): boolean {
     if (this.#closed) return false;
+    // Do not start a final duplicate, including one queued on a full pipe.
+    // Once any bytes were sent, the pending frame must still be completed.
+    if (final && this.#offset === 0 && this.#lastSent?.equals(packet)) {
+      this.#pending = undefined;
+      return true;
+    }
     // Finish an earlier partial frame before starting the current snapshot.
-    if (this.#pending && !this.#drain()) return false;
+    if (this.#pending) {
+      const unchanged = this.#pending.equals(packet);
+      if (!this.#drain()) return false;
+      if (unchanged) return true;
+    }
     this.#pending = packet;
     this.#offset = 0;
     return this.#drain();
@@ -71,6 +82,7 @@ export class Transport {
       );
       this.#offset += bytes;
       if (this.#offset !== packet.length) return false;
+      this.#lastSent = packet;
       this.#pending = undefined;
       this.#offset = 0;
       return true;
@@ -86,6 +98,7 @@ export class Transport {
     if (this.#closed) return;
     this.#closed = true;
     this.#pending = undefined;
+    this.#lastSent = undefined;
     this.#socket.destroy();
   }
 }

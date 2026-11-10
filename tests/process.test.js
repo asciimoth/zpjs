@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { run } from "./helpers.js";
 
 const worker = new URL("./fixtures/worker.js", import.meta.url).href;
-const workerPath = new URL(worker).pathname;
+const workerPath = fileURLToPath(worker);
 
 for (const method of ["spawn", "fork"]) {
   for (const nameSize of [40, 120]) {
@@ -15,7 +16,7 @@ for (const method of ["spawn", "fork"]) {
         const env={...process.env,NAME_SIZE:'${nameSize}'};
         const before={...env}; const stdio=['ignore','pipe','pipe',${method === "fork" ? "'ipc'," : ""}'pipe'];
         const original=[...stdio];
-        const child=task.${method}(${method === "fork" ? `new URL('${worker}')` : `process.execPath,['${workerPath}']`},{env,stdio});
+        const child=task.${method}(${method === "fork" ? `new URL(${JSON.stringify(worker)})` : `process.execPath,[${JSON.stringify(workerPath)}]`},{env,stdio});
         assert.deepEqual(env,before);assert.deepEqual(stdio,original);
         assert.equal(process.env.ZIG_PROGRESS,'3');
         p.flush();
@@ -42,7 +43,7 @@ for (const method of ["spawn", "fork"]) {
 test("fork preserves bidirectional IPC and silent stdio", async () => {
   const { frames, stdout, stderr } = await run(`
     const p=new Progress({refreshInterval:null});
-    const child=p.root.start('fork').fork(new URL('${worker}'),{silent:true,env:{...process.env,WAIT_IPC:'1',LOGS:'1'}});
+    const child=p.root.start('fork').fork(new URL(${JSON.stringify(worker)}),{silent:true,env:{...process.env,WAIT_IPC:'1',LOGS:'1'}});
     child.stdout.pipe(process.stdout);child.stderr.pipe(process.stderr);
     const [message]=await once(child,'message');assert.equal(message.ready,true);
     assert.notEqual(message.channel,'3'); child.send({update:7});
@@ -56,8 +57,8 @@ test("fork preserves bidirectional IPC and silent stdio", async () => {
 test("nested forks and concurrent children have separate trees", async () => {
   const { frames } = await run(`
     const p=new Progress({name:'parent',refreshInterval:5,initialDelay:0});
-    const a=p.root.start('a').fork(new URL('${worker}'),[],{env:{...process.env,NESTED:'1',WORKER_NAME:'first'}});
-    const b=p.root.start('b').spawn(process.execPath,['${workerPath}'],{env:{...process.env,WORKER_NAME:'second'}});
+    const a=p.root.start('a').fork(new URL(${JSON.stringify(worker)}),[],{env:{...process.env,NESTED:'1',WORKER_NAME:'first'}});
+    const b=p.root.start('b').spawn(process.execPath,[${JSON.stringify(workerPath)}],{env:{...process.env,WORKER_NAME:'second'}});
     const results=await Promise.all([once(a,'close'),once(b,'close')]);
     assert.deepEqual(results.map(r=>r[0]),[0,0]);p.close();
   `);
@@ -75,7 +76,7 @@ test("nested forks and concurrent children have separate trees", async () => {
 test("unnamed child root keeps the local task name", async () => {
   const { frames } = await run(`
     const p=new Progress({refreshInterval:null});
-    const c=p.root.start('label').fork(new URL('${worker}'),{env:{...process.env,WORKER_NAME:''}});
+    const c=p.root.start('label').fork(new URL(${JSON.stringify(worker)}),{env:{...process.env,WORKER_NAME:''}});
     assert.equal((await once(c,'close'))[0],0);p.close();
   `);
   assert.equal(frames[0][1].name, "label");
@@ -101,12 +102,12 @@ test("spawn failures release the attachment and preserve Node error events", asy
   const { frames } = await run(`
     const p=new Progress({refreshInterval:null});const task=p.root.start('retry');
     assert.throws(()=>task.spawn('x',[],{stdio:'invalid'}));
-    assert.throws(()=>task.fork(new URL('${worker}'),{stdio:['ignore','ignore','ignore']}));
+    assert.throws(()=>task.fork(new URL(${JSON.stringify(worker)}),{stdio:['ignore','ignore','ignore']}));
     assert.throws(()=>task.spawn('bad\\0command'));
     const failed=task.spawn('/no/such/zpjs-command');
     let error;failed.on('error',e=>{error=e});
     await new Promise(resolve=>failed.once('close',resolve));assert.equal(error.code,'ENOENT');
-    const child=task.spawn(process.execPath,['${workerPath}']);
+    const child=task.spawn(process.execPath,[${JSON.stringify(workerPath)}]);
     assert.equal((await once(child,'close'))[0],0);p.close();
   `);
   assert.equal(frames[0][1].name, "worker");
@@ -165,7 +166,7 @@ test("local tasks take priority when a child tree exceeds capacity", async () =>
     const p=new Progress({name:'parent',refreshInterval:null});
     const task=p.root.start('child');
     const nodes=Array.from({length:250},(_,i)=>p.root.start('local'+i));
-    const child=task.fork(new URL('${worker}'));
+    const child=task.fork(new URL(${JSON.stringify(worker)}));
     assert.equal((await once(child,'close'))[0],0);p.flush();
     nodes[0].end();p.close();
   `);

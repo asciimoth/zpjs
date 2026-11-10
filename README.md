@@ -183,9 +183,10 @@ tree. They do not disable unrelated tasks.
 Full channels can delay or drop snapshots. Partial packets finish before new
 packets begin. Memory use is bounded. A permanent write error disables
 reporting. `close()` and normal process exit try a final report, but never wait
-for space. A final packet can be lost or incomplete. If final delivery matters,
-retry `flush()` while the receiver is reading, then close. `SIGKILL` and forced
-termination cannot run cleanup.
+for space. They do not send another copy of the last complete report if the
+tree has not changed. A final packet can be lost or incomplete. If final delivery
+matters, retry `flush()` while the receiver is reading, then close. `SIGKILL` and
+forced termination cannot run cleanup.
 
 [protocol]: https://andrewkelley.me/post/zig-new-cli-progress-bar-explained.html#the-zig-progress-protocol-specification
 

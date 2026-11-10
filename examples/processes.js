@@ -1,5 +1,6 @@
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { Progress } from "zpjs";
 
 const worker = process.argv.includes("--worker");
@@ -21,7 +22,7 @@ try {
     const children = [
       spawned.spawn(
         process.execPath,
-        [new URL(import.meta.url).pathname, "--worker"],
+        [fileURLToPath(import.meta.url), "--worker"],
         { stdio: "inherit" },
       ),
       forked.fork(new URL(import.meta.url), ["--worker"]),

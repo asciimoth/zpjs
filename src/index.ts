@@ -309,7 +309,7 @@ export class Progress {
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    if (this.#transport?.enabled) this.#transport.send(this.#snapshot());
+    if (this.#transport?.enabled) this.#transport.send(this.#snapshot(), true);
     clearTimeout(this.#timer);
     reporters.delete(this);
     if (reporters.size === 0) process.removeListener("exit", closeReporters);

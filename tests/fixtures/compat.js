@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { Progress } from "zpjs";
 
 const p = new Progress({
@@ -19,7 +20,7 @@ const native = p.root.start("native placeholder");
 const children = [
   spawned.spawn(
     process.execPath,
-    [new URL("./worker.js", import.meta.url).pathname],
+    [fileURLToPath(new URL("./worker.js", import.meta.url))],
     {
       env: { ...process.env, WORKER_NAME: "spawn worker", LOGS: "1" },
       stdio: "inherit",
