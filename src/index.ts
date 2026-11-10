@@ -192,7 +192,11 @@ export class Progress {
     options: SpawnOptions,
     isFork: boolean,
   ): ChildProcess {
-    if (typeof options !== "object" || Array.isArray(options))
+    if (
+      options === null ||
+      typeof options !== "object" ||
+      Array.isArray(options)
+    )
       throw new TypeError("options must be an object");
     const active = this.enabled && this.#states.has(state);
     if (active && state.child)
@@ -429,7 +433,7 @@ export class ProgressNode {
       | undefined;
     return this.actions.launch(
       (configured) => spawn(command, argv, configured),
-      opts ?? {},
+      opts === undefined ? {} : opts,
       false,
     );
   }) as typeof spawn;

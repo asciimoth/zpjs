@@ -6,6 +6,35 @@ import { run } from "./helpers.js";
 const worker = new URL("./fixtures/worker.js", import.meta.url).href;
 const workerPath = fileURLToPath(worker);
 
+for (const disabled of [false, true]) {
+  test(`spawn rejects null options before launch (disabled: ${disabled})`, async () => {
+    await run(`
+      const p=new Progress({disabled:${disabled},refreshInterval:null});
+      try {
+        for (const args of [[], undefined, null]) {
+          assert.throws(()=>{
+            const child=p.root.spawn(process.execPath,args,null);
+            child.stdin?.end();
+            child.on('error',()=>{});
+          },TypeError);
+        }
+        const child=p.root.spawn(process.execPath,['-e','']);
+        assert.equal((await once(child,'close'))[0],0);
+      } finally {p.close();}
+    `);
+  });
+}
+
+test("fork accepts null options like Node.js", async () => {
+  await run(`
+    const p=new Progress({refreshInterval:null});
+    try {
+      const child=p.root.fork(new URL(${JSON.stringify(worker)}),[],null);
+      assert.equal((await once(child,'close'))[0],0);
+    } finally {p.close();}
+  `);
+});
+
 for (const method of ["spawn", "fork"]) {
   for (const nameSize of [40, 120]) {
     test(`${method} grafts child tree and retains it after exit (${nameSize})`, async () => {
