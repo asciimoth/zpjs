@@ -18,7 +18,10 @@ export function childPipe(): {
     try {
       // Node has no public pipe(2) or mkfifo(2) API. The private directory prevents
       // other users from opening the FIFO before it is unlinked.
-      const env = { ...process.env };
+      const env: NodeJS.ProcessEnv = Object.assign(
+        Object.create(null),
+        process.env,
+      );
       delete env.ZIG_PROGRESS;
       const result = spawnSync("mkfifo", ["-m", "600", path], {
         env,

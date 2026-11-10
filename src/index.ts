@@ -89,6 +89,7 @@ export class Progress {
       initialDelay = 200,
       nameSize = 120,
       disabled = false,
+      fd: inputFd,
     } = options;
     if (typeof disabled !== "boolean")
       throw new TypeError("disabled must be a boolean");
@@ -101,12 +102,12 @@ export class Progress {
       refreshInterval === null ? null : interval(refreshInterval, false);
     const delay = interval(initialDelay, true);
     if (
-      options.fd !== undefined &&
-      (!Number.isInteger(options.fd) || options.fd < 0 || options.fd > 65535)
+      inputFd !== undefined &&
+      (!Number.isInteger(inputFd) || inputFd < 0 || inputFd > 65535)
     ) {
       throw new RangeError("fd must be an integer from 0 to 65535");
     }
-    const fd = options.fd ?? environmentFd(process.env.ZIG_PROGRESS);
+    const fd = inputFd ?? environmentFd(process.env.ZIG_PROGRESS);
     if (!disabled && fd !== undefined) this.#transport = Transport.open(fd);
     const state: State = {
       parent: undefined,
@@ -198,16 +199,22 @@ export class Progress {
       Array.isArray(options)
     )
       throw new TypeError("options must be an object");
+    // Match Node: only own option properties control the process launch.
+    options = { __proto__: null, ...options } as SpawnOptions;
     const active = this.enabled && this.#states.has(state);
     if (active && state.child)
       throw new Error("a process is already attached to this node");
-    const env = { ...(options.env ?? process.env) };
-    for (const key of Object.keys(env)) {
+    const sourceEnv = options.env ?? process.env;
+    const env: NodeJS.ProcessEnv = Object.create(null);
+    // Node includes inherited environment entries. Copy them as own entries,
+    // except the progress channel, and do not inherit Object.prototype again.
+    for (const key in sourceEnv) {
       if (
         key === "ZIG_PROGRESS" ||
         (process.platform === "win32" && key.toUpperCase() === "ZIG_PROGRESS")
       )
-        delete env[key];
+        continue;
+      env[key] = sourceEnv[key];
     }
     if (!active) return launch({ ...options, env });
     const stdio = childStdio(

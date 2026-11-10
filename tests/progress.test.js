@@ -142,6 +142,20 @@ test("invalid constructor inputs leave the progress descriptor available", async
   `);
 });
 
+test("the reporter opens the same descriptor value that it validates", async () => {
+  await run(`
+    let reads=0;
+    const p=new Progress({
+      refreshInterval:null,
+      get fd() {return ++reads===1 ? 3 : 65535;},
+    });
+    try {
+      assert.equal(p.enabled,true);
+      assert.equal(p.flush(),true);
+    } finally {p.close();}
+  `);
+});
+
 test("invalid updates fail even for disabled nodes", () => {
   const p = new Progress({ disabled: true });
   for (const count of [

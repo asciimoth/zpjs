@@ -7,6 +7,63 @@ const worker = new URL("./fixtures/worker.js", import.meta.url).href;
 const workerPath = fileURLToPath(worker);
 
 for (const disabled of [false, true]) {
+  test(`spawn preserves inherited environment entries (disabled: ${disabled})`, async () => {
+    const { stdout } = await run(`
+      const p=new Progress({disabled:${disabled},refreshInterval:null});
+      const inherited={ZPJS_TEST_VALUE:'inherited',ZIG_PROGRESS:'123'};
+      const env=Object.create(inherited);
+      env.ZPJS_TEST_OWN='own';
+      try {
+        const child=p.root.spawn(process.execPath,['-e',
+          'console.log(JSON.stringify([process.env.ZPJS_TEST_VALUE,process.env.ZPJS_TEST_OWN,process.env.ZIG_PROGRESS??null]))'],{env});
+        child.stdout.pipe(process.stdout);
+        assert.equal((await once(child,'close'))[0],0);
+        assert.equal(Object.hasOwn(env,'ZIG_PROGRESS'),false);
+        assert.equal(inherited.ZIG_PROGRESS,'123');
+      } finally {p.close();}
+    `);
+    assert.deepEqual(JSON.parse(stdout), [
+      "inherited",
+      "own",
+      disabled ? null : "3",
+    ]);
+  });
+
+  test(`spawn ignores inherited process options (disabled: ${disabled})`, async () => {
+    await run(`
+      const p=new Progress({disabled:${disabled},refreshInterval:null});
+      try {
+        const options=Object.create({stdio:'ignore',env:{ZPJS_TEST_VALUE:'unexpected'}});
+        const child=p.root.spawn(process.execPath,['-e',
+          'if(process.env.ZPJS_TEST_VALUE)process.exit(1)'],options);
+        assert.ok(child.stdout);
+        assert.equal((await once(child,'close'))[0],0);
+      } finally {p.close();}
+    `);
+  });
+}
+
+test("disabled children cannot inherit a progress value from Object.prototype", async () => {
+  const { stdout } = await run(`
+    const p=new Progress({disabled:true});
+    let child;
+    try {
+      Object.defineProperty(Object.prototype,'ZIG_PROGRESS',{
+        value:'123',enumerable:true,configurable:true,writable:true,
+      });
+      child=p.root.spawn(process.execPath,['-e',
+        'console.log(process.env.ZIG_PROGRESS??"none")'],{env:{}});
+    } finally {
+      delete Object.prototype.ZIG_PROGRESS;
+      p.close();
+    }
+    child.stdout.pipe(process.stdout);
+    assert.equal((await once(child,'close'))[0],0);
+  `);
+  assert.equal(stdout, "none\n");
+});
+
+for (const disabled of [false, true]) {
   test(`spawn rejects null options before launch (disabled: ${disabled})`, async () => {
     await run(`
       const p=new Progress({disabled:${disabled},refreshInterval:null});
