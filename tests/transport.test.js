@@ -38,6 +38,33 @@ test("only one reporter owns a channel and close releases it", async () => {
   `);
 });
 
+test("separate package copies cannot own the same descriptor", async () => {
+  const { frames } = await run(`
+    import fs from 'node:fs';
+    import {tmpdir} from 'node:os';
+    import {join} from 'node:path';
+    import {fileURLToPath,pathToFileURL} from 'node:url';
+    const directory=fs.mkdtempSync(join(tmpdir(),'zpjs-copy-'));
+    const p=new Progress({name:'owner',refreshInterval:null});
+    try {
+      fs.cpSync(fileURLToPath(new URL('.',import.meta.resolve('zpjs'))),directory,{recursive:true});
+      fs.writeFileSync(join(directory,'package.json'),JSON.stringify({type:'module'}));
+      const {Progress:Other}=await import(pathToFileURL(join(directory,'index.js')).href);
+      const duplicate=new Other({refreshInterval:null});
+      assert.equal(duplicate.enabled,false);
+      duplicate.close();
+      p.root.completeOne();
+      assert.equal(p.flush(),true);
+    } finally {
+      p.close();
+      fs.rmSync(directory,{recursive:true,force:true});
+    }
+  `);
+  assert.deepEqual(frames, [
+    [{ name: "owner", parent: 255, completed: 1, total: 0 }],
+  ]);
+});
+
 for (const code of ["EAGAIN", "EWOULDBLOCK", "EINTR"]) {
   test(`retry ${code} and short writes without mixing frames`, async () => {
     const { frames } = await run(`

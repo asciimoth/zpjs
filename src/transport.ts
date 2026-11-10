@@ -2,7 +2,12 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import { Socket } from "node:net";
 
-const owners = new Set<number>();
+// Dependencies can load separate copies of this package in the same isolate.
+// Share the guard so they cannot write to or close each other's descriptor.
+const ownership = Symbol.for("zpjs.transport.owners");
+const registry = process as NodeJS.Process & { [ownership]?: Set<number> };
+registry[ownership] ??= new Set<number>();
+const owners = registry[ownership];
 
 export function environmentFd(value: string | undefined): number | undefined {
   if (!value || !/^[0-9]+$/.test(value)) return undefined;
