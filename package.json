@@ -1,0 +1,26 @@
+{
+  "name": "zpjs",
+  "version": "0.0.0",
+  "description": "Zig progress protocol client library for JavaScript and TypeScript",
+  "license": "CC0-1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "just build",
+    "test": "just test",
+    "check": "just check",
+    "prepack": "just check-js"
+  }
+}

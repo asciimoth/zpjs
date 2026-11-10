@@ -22,3 +22,19 @@ lerna-debug.log*
 # temp directory
 .temp
 .tmp
+
+.env
+/.envrc
+/.pre-commit-config.yaml
+/.direnv
+
+/local
+
+# Nix build outputs
+/result
+/result-*
+
+# npm package archives and test coverage
+/*.tgz
+/coverage
+*.tsbuildinfo
