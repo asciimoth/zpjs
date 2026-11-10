@@ -37,7 +37,7 @@ export interface ProgressOptions {
   /** Owned descriptor. Defaults to the ZIG_PROGRESS environment variable. */
   fd?: number;
   disabled?: boolean;
-  /** 120 for zpg and recent Zig; 40 for the published 2024 protocol. */
+  /** 120 for zpg; 40 for the published protocol and Zig 0.15.2. */
   nameSize?: NameSize;
 }
 
@@ -76,16 +76,30 @@ export class Progress {
   #closed = false;
 
   constructor(options: ProgressOptions = {}) {
-    this.#nameSize = options.nameSize ?? 120;
+    if (
+      options === null ||
+      typeof options !== "object" ||
+      Array.isArray(options)
+    )
+      throw new TypeError("options must be an object");
+    const {
+      name: inputName = "",
+      estimatedTotalItems = 0,
+      refreshInterval = 80,
+      initialDelay = 200,
+      nameSize = 120,
+      disabled = false,
+    } = options;
+    if (typeof disabled !== "boolean")
+      throw new TypeError("disabled must be a boolean");
+    this.#nameSize = nameSize;
     if (this.#nameSize !== 40 && this.#nameSize !== 120)
       throw new RangeError("nameSize must be 40 or 120");
-    const name = wireName(options.name ?? "", this.#nameSize);
-    const total = count(options.estimatedTotalItems ?? 0, MAX_TOTAL);
+    const name = wireName(inputName, this.#nameSize);
+    const total = count(estimatedTotalItems, MAX_TOTAL);
     const refresh =
-      options.refreshInterval === null
-        ? null
-        : interval(options.refreshInterval ?? 80, false);
-    const delay = interval(options.initialDelay ?? 200, true);
+      refreshInterval === null ? null : interval(refreshInterval, false);
+    const delay = interval(initialDelay, true);
     if (
       options.fd !== undefined &&
       (!Number.isInteger(options.fd) || options.fd < 0 || options.fd > 65535)
@@ -93,8 +107,7 @@ export class Progress {
       throw new RangeError("fd must be an integer from 0 to 65535");
     }
     const fd = options.fd ?? environmentFd(process.env.ZIG_PROGRESS);
-    if (!options.disabled && fd !== undefined)
-      this.#transport = Transport.open(fd);
+    if (!disabled && fd !== undefined) this.#transport = Transport.open(fd);
     const state: State = {
       parent: undefined,
       record: { name, total, completed: 0, parent: 255 },

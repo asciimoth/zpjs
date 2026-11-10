@@ -126,6 +126,9 @@ node. `ProgressNode` is also exported as `Node`.
 
 Intervals must be finite and at most 2147483647 milliseconds.
 `refreshInterval` must be at least 1; `initialDelay` must be nonnegative.
+Omitted or `undefined` options use their defaults. Only `refreshInterval`
+accepts `null`. Invalid options throw before the reporter takes ownership of a
+descriptor, even when reporting is disabled.
 
 - `progress.enabled`: whether reporting is active.
 - `progress.flush()`: collect child reports and try to send a snapshot. Returns

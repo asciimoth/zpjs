@@ -98,24 +98,49 @@ test("disabled reporters have no output or exit listeners", () => {
 });
 
 for (const options of [
+  { nameSize: null },
   { nameSize: 41 },
   { refreshInterval: 0 },
   { refreshInterval: -1 },
   { refreshInterval: Infinity },
   { refreshInterval: NaN },
   { initialDelay: -1 },
+  { initialDelay: null },
   { initialDelay: 2147483648 },
   { fd: -1 },
   { fd: 65536 },
   { fd: 1.5 },
   { estimatedTotalItems: -1 },
+  { estimatedTotalItems: null },
   { estimatedTotalItems: 1.2 },
   { name: 4 },
+  { name: null },
+  { disabled: null },
+  { disabled: "false" },
 ]) {
   test(`invalid options: ${JSON.stringify(options)}`, () => {
-    assert.throws(() => new Progress({ ...options, disabled: true }));
+    assert.throws(() => new Progress({ disabled: true, ...options }));
   });
 }
+
+test("invalid constructor inputs leave the progress descriptor available", async () => {
+  await run(`
+    for (const options of [null, false, 42, 'options', [], ()=>{}]) {
+      assert.throws(()=>new Progress(options),TypeError);
+    }
+    for (const options of [
+      {name:null}, {estimatedTotalItems:null}, {initialDelay:null},
+      {nameSize:null}, {disabled:'false'},
+    ]) {
+      assert.throws(()=>new Progress({...options,fd:3}));
+    }
+    const p=new Progress({
+      name:undefined,estimatedTotalItems:undefined,initialDelay:undefined,
+      nameSize:undefined,disabled:undefined,refreshInterval:null,
+    });
+    assert.equal(p.enabled,true);assert.equal(p.flush(),true);p.close();
+  `);
+});
 
 test("invalid updates fail even for disabled nodes", () => {
   const p = new Progress({ disabled: true });
