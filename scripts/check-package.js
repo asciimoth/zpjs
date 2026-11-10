@@ -80,14 +80,14 @@ try {
     "--input-type=module",
     "-e",
     `import assert from "node:assert/strict";
-     import { Progress, ProgressNode, Node } from "zpjs";
+     import { Progress, ProgressNode, Node } from "@asciimoth/zpjs";
      ${assertions}`,
   ]);
   run([
     "--input-type=commonjs",
     "-e",
     `const assert = require("node:assert/strict");
-     const { Progress, ProgressNode, Node } = require("zpjs");
+     const { Progress, ProgressNode, Node } = require("@asciimoth/zpjs");
      ${assertions}`,
   ]);
 

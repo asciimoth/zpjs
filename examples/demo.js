@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 
 async function worker() {
   const progress = new Progress({

@@ -14,7 +14,7 @@ from zppy import Progress
 with Progress("python", refresh_rate=None) as p:
     assert p.enabled
     task = p.root.start("javascript")
-    code = 'import {Progress} from "zpjs"; const p=new Progress({name:"JS grandchild",refreshInterval:null}); p.root.setCompletedItems(6); p.close();'
+    code = 'import {Progress} from "@asciimoth/zpjs"; const p=new Progress({name:"JS grandchild",refreshInterval:null}); p.root.setCompletedItems(6); p.close();'
     child = task.spawn([os.environ["NODE"], "--input-type=module", "-e", code])
     assert child.wait() == 0
     p.flush()

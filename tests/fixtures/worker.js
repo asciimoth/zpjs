@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 
 const p = new Progress({
   name: process.env.WORKER_NAME ?? "worker",

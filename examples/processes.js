@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 
 const worker = process.argv.includes("--worker");
 const progress = new Progress({

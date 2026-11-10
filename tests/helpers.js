@@ -43,7 +43,7 @@ export async function run(
       "--input-type=module",
       "-e",
       `
-    import {Progress} from 'zpjs';
+    import {Progress} from '@asciimoth/zpjs';
     import assert from 'node:assert/strict';
     import {once} from 'node:events';
     import {setTimeout as delay} from 'node:timers/promises';

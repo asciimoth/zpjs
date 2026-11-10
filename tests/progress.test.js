@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 import { run } from "./helpers.js";
 
 for (const nameSize of [40, 120]) {
@@ -193,7 +193,7 @@ test("invalid environment and ordinary files disable reporting", () => {
         "--input-type=module",
         "-e",
         `
-      import {Progress} from 'zpjs';
+      import {Progress} from '@asciimoth/zpjs';
       if(new Progress().enabled)process.exit(1);
     `,
       ],

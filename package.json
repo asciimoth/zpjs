@@ -1,5 +1,5 @@
 {
-  "name": "zpjs",
+  "name": "@asciimoth/zpjs",
   "version": "0.1.0",
   "description": "Zig progress protocol client library for JavaScript and TypeScript",
   "license": "CC0-1.0",

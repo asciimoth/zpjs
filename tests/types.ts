@@ -9,7 +9,7 @@ import {
   Progress,
   type ProgressNode,
   type ProgressOptions,
-} from "zpjs";
+} from "@asciimoth/zpjs";
 
 const options: ProgressOptions = {
   name: "compile",

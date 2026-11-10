@@ -13,10 +13,11 @@ temporary directory.
 ## Installation
 
 ```sh
-npm install zpjs
+npm install @asciimoth/zpjs
 ```
 
-The package supports ES module imports and CommonJS `require("zpjs")`.
+The npm package name is `@asciimoth/zpjs`. It supports ES module imports and
+CommonJS `require("@asciimoth/zpjs")`.
 It includes TypeScript declarations.
 
 ## Zig progress protocol
@@ -53,7 +54,7 @@ Save this example as `build.mjs`:
 
 ```js
 import { setTimeout as delay } from "node:timers/promises";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 
 const progress = new Progress({ name: "build", estimatedTotalItems: 2 });
 try {
@@ -107,7 +108,7 @@ the task example at the same time:
 ```js
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 
 const workerPath = new URL("./build.mjs", import.meta.url);
 const progress = new Progress({ name: "workers", estimatedTotalItems: 2 });

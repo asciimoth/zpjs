@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 
 const p = new Progress({
   name: "JS root",

@@ -6,7 +6,7 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Progress } from "zpjs";
+import { Progress } from "@asciimoth/zpjs";
 import { packets, run } from "./helpers.js";
 
 test("regular files and invalid descriptors are left untouched", () => {
@@ -47,7 +47,7 @@ test("separate package copies cannot own the same descriptor", async () => {
     const directory=fs.mkdtempSync(join(tmpdir(),'zpjs-copy-'));
     const p=new Progress({name:'owner',refreshInterval:null});
     try {
-      fs.cpSync(fileURLToPath(new URL('.',import.meta.resolve('zpjs'))),directory,{recursive:true});
+      fs.cpSync(fileURLToPath(new URL('.',import.meta.resolve('@asciimoth/zpjs'))),directory,{recursive:true});
       fs.writeFileSync(join(directory,'package.json'),JSON.stringify({type:'module'}));
       const {Progress:Other}=await import(pathToFileURL(join(directory,'index.js')).href);
       const duplicate=new Other({refreshInterval:null});
@@ -154,7 +154,7 @@ test("a full real pipe does not block and retained frames remain valid", {
       "--input-type=module",
       "-e",
       `
-    import {Progress} from 'zpjs';
+    import {Progress} from '@asciimoth/zpjs';
     const p=new Progress({name:'full',refreshInterval:null});
     for(let i=0;i<252;i++)p.root.start('n'+i);
     let failed=false;
