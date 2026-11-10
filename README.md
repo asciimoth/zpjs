@@ -212,10 +212,15 @@ Use `nix develop` for the pinned tools and supervisor. The `just` commands also
 support build, tests, formatting, and checks. Run examples with:
 
 ```sh
-npm run build
-zpg node examples/demo.js
-zpg node examples/processes.js
+just run
+just run examples/processes.js
 ```
+
+`just run` builds the library and runs the example under `zpg`. The default
+demo starts `zpg --mock` and a Node.js fork worker at the same time. It collects
+both progress trees and sends them to the supervisor. Each task ends when its
+child exits. A failed child makes the demo exit with a nonzero status.
+The mock's stdin is closed so piped input does not replace its built-in demo.
 
 Reference implementations:
 [Zig std.Progress](https://github.com/ziglang/zig/blob/0.15.2/lib/std/Progress.zig),

@@ -10,10 +10,10 @@ build:
     rm -rf dist
     tsc -p tsconfig.json
 
-# Run an example. Extra arguments go to the example.
+# Run an example under zpg. Extra arguments go to the example.
 [positional-arguments]
 run example="examples/demo.js" *args: build
-    node "$@"
+    zpg node "$@"
 
 # Run tests with the Node.js standard library. Extra arguments go to Node.
 [positional-arguments]
