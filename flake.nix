@@ -5,6 +5,11 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     git-hooks.url = "github:cachix/git-hooks.nix";
     git-hooks.inputs.nixpkgs.follows = "nixpkgs";
+    zpg = {
+      url = "github:asciimoth/zpg";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.git-hooks.follows = "git-hooks";
+    };
   };
 
   outputs =
@@ -12,6 +17,7 @@
       self,
       nixpkgs,
       git-hooks,
+      zpg,
       ...
     }:
     let
@@ -25,7 +31,14 @@
         pkgs.typescript
         pkgs.biome
         pkgs.just
+        pkgs.coreutils
       ];
+      nodeModulesFor =
+        pkgs:
+        pkgs.importNpmLock.buildNodeModules {
+          npmRoot = ./.;
+          nodejs = pkgs.nodejs_22;
+        };
     in
     {
       checks = eachSystem (
@@ -34,21 +47,29 @@
           pkgs = nixpkgs.legacyPackages.${system};
           jsCheck = pkgs.writeShellApplication {
             name = "zpjs-check";
-            runtimeInputs = toolsFor pkgs;
-            text = "just check-js";
+            runtimeInputs = toolsFor pkgs ++ [ zpg.packages.${system}.zpg ];
+            text = ''
+              if [ ! -e node_modules ]; then
+                ln -s ${nodeModulesFor pkgs}/node_modules node_modules
+              fi
+              export ZPJS_REQUIRE_ZPG=1
+              just check-js
+            '';
           };
         in
         {
           node22 =
             pkgs.runCommand "zpjs-node22-check"
               {
-                nativeBuildInputs = toolsFor pkgs;
+                nativeBuildInputs = toolsFor pkgs ++ [ zpg.packages.${system}.zpg ];
                 src = pkgs.lib.cleanSource ./.;
               }
               ''
                 cp -r "$src" source
                 chmod -R u+w source
                 cd source
+                ln -s ${nodeModulesFor pkgs}/node_modules node_modules
+                export ZPJS_REQUIRE_ZPG=1
                 just check-js
                 just run
                 touch "$out"
@@ -102,8 +123,12 @@
         in
         {
           default = pkgs.mkShell {
-            packages = toolsFor pkgs ++ hook.enabledPackages;
-            inherit (hook) shellHook;
+            packages = toolsFor pkgs ++ [ zpg.packages.${system}.zpg ] ++ hook.enabledPackages;
+            shellHook = hook.shellHook + ''
+              if [ ! -e node_modules ]; then
+                ln -s ${nodeModulesFor pkgs}/node_modules node_modules
+              fi
+            '';
           };
         }
       );

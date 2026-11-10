@@ -20,6 +20,14 @@ run example="examples/demo.js" *args: build
 test *args: build
     node --test "$@" tests/*.test.js
 
+# Require the reference supervisor for compatibility tests.
+compat: build
+    ZPJS_REQUIRE_ZPG=1 node --test tests/zpg.test.js
+
+# Measure statement and branch coverage.
+coverage: build
+    node --test --experimental-test-coverage tests/*.test.js
+
 # Check that a TypeScript consumer can use the built package.
 typecheck: build
     tsc -p tsconfig.test.json

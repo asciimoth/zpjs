@@ -1,0 +1,235 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { run } from "./helpers.js";
+
+const worker = new URL("./fixtures/worker.js", import.meta.url).href;
+const workerPath = new URL(worker).pathname;
+
+for (const method of ["spawn", "fork"]) {
+  for (const nameSize of [40, 120]) {
+    test(`${method} grafts child tree and retains it after exit (${nameSize})`, async () => {
+      const { frames } = await run(
+        `
+        const p=new Progress({name:'parent',refreshInterval:null,nameSize:${nameSize}});
+        const task=p.root.start('placeholder');
+        const env={...process.env,NAME_SIZE:'${nameSize}'};
+        const before={...env}; const stdio=['ignore','pipe','pipe',${method === "fork" ? "'ipc'," : ""}'pipe'];
+        const original=[...stdio];
+        const child=task.${method}(${method === "fork" ? `new URL('${worker}')` : `process.execPath,['${workerPath}']`},{env,stdio});
+        assert.deepEqual(env,before);assert.deepEqual(stdio,original);
+        assert.equal(process.env.ZIG_PROGRESS,'3');
+        p.flush();
+        const [code]=await once(child,'close');assert.equal(code,0);
+        p.flush(); await delay(10); p.flush();
+        assert.throws(()=>task.spawn(process.execPath,['-e','']),/already attached/);
+        task.end();p.close();
+      `,
+        { nameSize },
+      );
+      assert.equal(frames[0][1].name, "placeholder");
+      assert.deepEqual(frames[1], [
+        { name: "parent", parent: 255, completed: 0, total: 0 },
+        { name: "worker", parent: 0, completed: 4, total: 10 },
+        { name: "leaf", parent: 1, completed: 1, total: 3 },
+      ]);
+      assert.deepEqual(frames[1], frames[2]);
+      assert.equal(frames.at(-1)[0].completed, 1);
+      assert.equal(frames.at(-1).length, 1);
+    });
+  }
+}
+
+test("fork preserves bidirectional IPC and silent stdio", async () => {
+  const { frames, stdout, stderr } = await run(`
+    const p=new Progress({refreshInterval:null});
+    const child=p.root.start('fork').fork(new URL('${worker}'),{silent:true,env:{...process.env,WAIT_IPC:'1',LOGS:'1'}});
+    child.stdout.pipe(process.stdout);child.stderr.pipe(process.stderr);
+    const [message]=await once(child,'message');assert.equal(message.ready,true);
+    assert.notEqual(message.channel,'3'); child.send({update:7});
+    const [code]=await once(child,'close');assert.equal(code,0);p.close();
+  `);
+  assert.equal(frames.at(-1)[1].completed, 7);
+  assert.equal(stdout, "worker stdout\n");
+  assert.equal(stderr, "worker stderr\n");
+});
+
+test("nested forks and concurrent children have separate trees", async () => {
+  const { frames } = await run(`
+    const p=new Progress({name:'parent',refreshInterval:5,initialDelay:0});
+    const a=p.root.start('a').fork(new URL('${worker}'),[],{env:{...process.env,NESTED:'1',WORKER_NAME:'first'}});
+    const b=p.root.start('b').spawn(process.execPath,['${workerPath}'],{env:{...process.env,WORKER_NAME:'second'}});
+    const results=await Promise.all([once(a,'close'),once(b,'close')]);
+    assert.deepEqual(results.map(r=>r[0]),[0,0]);p.close();
+  `);
+  const last = frames.at(-1);
+  assert.deepEqual(
+    last.map((r) => r.name),
+    ["parent", "first", "second", "leaf", "grandchild", "leaf", "leaf"],
+  );
+  assert.deepEqual(
+    last.map((r) => r.parent),
+    [255, 0, 0, 1, 1, 4, 2],
+  );
+});
+
+test("unnamed child root keeps the local task name", async () => {
+  const { frames } = await run(`
+    const p=new Progress({refreshInterval:null});
+    const c=p.root.start('label').fork(new URL('${worker}'),{env:{...process.env,WORKER_NAME:''}});
+    assert.equal((await once(c,'close'))[0],0);p.close();
+  `);
+  assert.equal(frames[0][1].name, "label");
+  assert.equal(frames[0][1].completed, 4);
+});
+
+for (const mode of ["disabled", "ended", "closed"]) {
+  test(`${mode} nodes run children with progress removed`, async () => {
+    const { stdout } = await run(`
+      const p=new Progress({disabled:${mode === "disabled"},refreshInterval:null});
+      const node=p.root.start('task');
+      ${mode === "ended" ? "node.end();" : mode === "closed" ? "p.close();" : ""}
+      const env={...process.env,ZIG_PROGRESS:'123'};
+      const c=node.spawn(process.execPath,['-e','console.log(process.env.ZIG_PROGRESS ?? "none")'],{env});
+      c.stdout.pipe(process.stdout);assert.equal((await once(c,'close'))[0],0);
+      assert.equal(env.ZIG_PROGRESS,'123');p.close();
+    `);
+    assert.equal(stdout, "none\n");
+  });
+}
+
+test("spawn failures release the attachment and preserve Node error events", async () => {
+  const { frames } = await run(`
+    const p=new Progress({refreshInterval:null});const task=p.root.start('retry');
+    assert.throws(()=>task.spawn('x',[],{stdio:'invalid'}));
+    assert.throws(()=>task.fork(new URL('${worker}'),{stdio:['ignore','ignore','ignore']}));
+    assert.throws(()=>task.spawn('bad\\0command'));
+    const failed=task.spawn('/no/such/zpjs-command');
+    let error;failed.on('error',e=>{error=e});
+    await new Promise(resolve=>failed.once('close',resolve));assert.equal(error.code,'ENOENT');
+    const child=task.spawn(process.execPath,['${workerPath}']);
+    assert.equal((await once(child,'close'))[0],0);p.close();
+  `);
+  assert.equal(frames[0][1].name, "worker");
+});
+
+test("AbortSignal and process exit codes retain Node behavior", async () => {
+  await run(`
+    const p=new Progress({refreshInterval:null});
+    const controller=new AbortController();
+    const c=p.root.start('abort').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{signal:controller.signal});
+    let error;c.on('error',e=>{error=e});
+    const closed=new Promise(resolve=>c.once('close',resolve));controller.abort();await closed;
+    assert.equal(error.name,'AbortError');
+    const other=p.root.start('exit').spawn(process.execPath,['-e','process.exit(7)']);
+    assert.equal((await once(other,'close'))[0],7);p.close();
+  `);
+});
+
+test("ending a node and closing a reporter do not kill its process", async () => {
+  const { stdout } = await run(`
+    const p=new Progress({refreshInterval:null}); const task=p.root.start('still running');
+    const c=task.spawn(process.execPath,['-e','setTimeout(()=>console.log("alive"),80)']);
+    c.stdout.pipe(process.stdout);task.end();p.close();
+    assert.equal((await once(c,'close'))[0],0);
+  `);
+  assert.equal(stdout, "alive\n");
+});
+
+test("spawn preserves shell, cwd, env, input, output, and extra descriptors", async () => {
+  const { stdout } = await run(`
+    const p=new Progress({refreshInterval:null});
+    const env={TEST_VALUE:'present',PATH:process.env.PATH};
+    const c=p.root.spawn('cat; printf "%s" "$TEST_VALUE"',{shell:true,cwd:'/',env,stdio:['pipe','pipe','pipe','pipe']});
+    c.stdout.pipe(process.stdout);c.stdin.end('input:');
+    assert.equal((await once(c,'close'))[0],0);assert.equal(env.ZIG_PROGRESS,undefined);p.close();
+  `);
+  assert.equal(stdout, "input:present");
+});
+
+test("a malformed child cannot corrupt other task reports", async () => {
+  const { frames } = await run(`
+    const p=new Progress({name:'parent',refreshInterval:null});
+    const task=p.root.start('bad');
+    const c=task.spawn(process.execPath,['-e',
+      'require("node:fs").writeSync(Number(process.env.ZIG_PROGRESS),Buffer.from([255]))']);
+    assert.equal((await once(c,'close'))[0],0);p.close();
+  `);
+  assert.deepEqual(
+    frames[0].map((r) => r.name),
+    ["parent", "bad"],
+  );
+});
+
+test("local tasks take priority when a child tree exceeds capacity", async () => {
+  const { frames } = await run(`
+    const p=new Progress({name:'parent',refreshInterval:null});
+    const task=p.root.start('child');
+    const nodes=Array.from({length:250},(_,i)=>p.root.start('local'+i));
+    const child=task.fork(new URL('${worker}'));
+    assert.equal((await once(child,'close'))[0],0);p.flush();
+    nodes[0].end();p.close();
+  `);
+  assert.equal(frames[0].length, 253);
+  assert.equal(frames[0][1].name, "worker");
+  assert.equal(frames[0].at(-1).name, "leaf");
+  assert.equal(frames[0].at(-1).parent, 1);
+  assert.equal(frames[1].length, 252);
+});
+
+test("explicit undefined args preserve third-argument options", async () => {
+  const { stdout } = await run(`
+    const p=new Progress({refreshInterval:null});
+    const c=p.root.spawn('printf "argument options"',undefined,{shell:true});
+    c.stdout.pipe(process.stdout);assert.equal((await once(c,'close'))[0],0);p.close();
+  `);
+  assert.equal(stdout, "argument options");
+});
+
+test("missing mkfifo fails cleanly and the task remains reusable", async () => {
+  await run(`
+    const p=new Progress({refreshInterval:null});const task=p.root.start('retry');
+    const path=process.env.PATH;process.env.PATH='/no/such/directory';
+    try { assert.throws(()=>task.spawn(process.execPath,['-e','']),{code:'ENOENT'}); }
+    finally {process.env.PATH=path;}
+    const c=task.spawn(process.execPath,['-e','']);assert.equal((await once(c,'close'))[0],0);p.close();
+  `);
+});
+
+test("extra caller descriptors are usable and separate from progress", async () => {
+  const { stdout } = await run(`
+    const p=new Progress({refreshInterval:null});
+    const c=p.root.spawn(process.execPath,['-e',
+      'require("node:fs").writeSync(4,"extra");console.log(process.env.ZIG_PROGRESS)'],
+      {stdio:['ignore','pipe','pipe','pipe','pipe']});
+    let extra='';c.stdio[4].on('data',b=>extra+=b);c.stdout.pipe(process.stdout);
+    assert.equal((await once(c,'close'))[0],0);assert.equal(extra,'extra');p.close();
+  `);
+  assert.equal(stdout, "5\n");
+});
+
+test("private progress channels do not prevent ChildProcess.unref", async () => {
+  await run(
+    `
+    const p=new Progress({refreshInterval:null});
+    const child=p.root.spawn(process.execPath,['-e','setTimeout(()=>{},1500)'],{stdio:'ignore'});
+    child.unref();
+  `,
+    { timeout: 800 },
+  );
+});
+
+test("disabled fork preserves IPC and removes the inherited progress value", async () => {
+  await run(`
+    import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+    import {tmpdir} from 'node:os';import {join} from 'node:path';
+    const directory=mkdtempSync(join(tmpdir(),'zpjs-disabled-'));
+    try {
+      const script=join(directory,'child.cjs');
+      writeFileSync(script,'process.send({progress:process.env.ZIG_PROGRESS??null});process.disconnect()');
+      const p=new Progress({disabled:true});
+      const child=p.root.fork(script,{env:{...process.env,ZIG_PROGRESS:'123'}});
+      const done=once(child,'close');const [message]=await once(child,'message');
+      assert.deepEqual(message,{progress:null});assert.equal((await done)[0],0);p.close();
+    } finally {rmSync(directory,{recursive:true});}
+  `);
+});

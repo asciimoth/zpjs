@@ -10,7 +10,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -18,9 +19,18 @@
     "dist"
   ],
   "scripts": {
-    "build": "just build",
-    "test": "just test",
-    "check": "just check",
-    "prepack": "just check-js"
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.js",
+    "test:coverage": "npm run build && node --test --experimental-test-coverage tests/*.test.js",
+    "test:compat": "npm run build && ZPJS_REQUIRE_ZPG=1 node --test tests/zpg.test.js",
+    "typecheck": "npm run build && tsc -p tsconfig.test.json",
+    "lint": "biome check src tests examples package.json tsconfig.json tsconfig.test.json biome.json",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "prepack": "npm run check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^22.20.5",
+    "typescript": "^7.0.2"
   }
 }

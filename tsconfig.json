@@ -14,7 +14,7 @@
     "declaration": true,
     "noEmitOnError": true,
     "forceConsistentCasingInFileNames": true,
-    "types": []
+    "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.js"]
 }
