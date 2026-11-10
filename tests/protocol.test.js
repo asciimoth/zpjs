@@ -99,6 +99,50 @@ test("decoder rejects invalid length and reserved values", () => {
   assert.deepEqual(decode(Buffer.from([0]), 40), []);
 });
 
+for (const size of [40, 120]) {
+  test(`decoder validates five-node parent graphs (${size})`, () => {
+    // Follow parent chains independently of the decoder's tree traversal.
+    // Include forward links, cycles, extra roots, and out-of-range parents.
+    const choices = [0, 1, 2, 3, 4, 254, 255];
+    for (let graph = 0; graph < choices.length ** 4; graph++) {
+      let remaining = graph;
+      const parents = [255];
+      for (let i = 1; i < 5; i++) {
+        parents.push(choices[remaining % choices.length]);
+        remaining = Math.floor(remaining / choices.length);
+      }
+      const valid = parents.every((_, start) => {
+        const visited = new Set();
+        let current = start;
+        while (current !== 0) {
+          if (current >= parents.length || visited.has(current)) return false;
+          visited.add(current);
+          current = parents[current];
+        }
+        return true;
+      });
+      const packet = encode(
+        parents.map((parent, i) => ({
+          name: wireName(String(i), size),
+          parent,
+          completed: i,
+          total: 5,
+        })),
+        size,
+      );
+      const decoded = decode(packet, size);
+      assert.equal(decoded !== null, valid, `parents: ${parents}`);
+      if (decoded === null) continue;
+      assert.equal(decoded.length, parents.length);
+      for (let i = 1; i < decoded.length; i++) {
+        const node = decoded[i];
+        assert.ok(node.parent < i);
+        assert.equal(decoded[node.parent].completed, parents[node.completed]);
+      }
+    }
+  });
+}
+
 test("stream decoder handles every split, coalesced frames, and empty frames", () => {
   const a = encode([record("first"), record("nested", 0)], 40);
   const b = encode([record("last")], 40);

@@ -170,6 +170,21 @@ test("unnamed child root keeps the local task name", async () => {
 });
 
 for (const mode of ["disabled", "ended", "closed"]) {
+  test(`${mode} nodes copy short and frozen stdio arrays`, async () => {
+    await run(`
+      const p=new Progress({disabled:${mode === "disabled"},refreshInterval:null});
+      const node=p.root.start('task');
+      ${mode === "ended" ? "node.end();" : mode === "closed" ? "p.close();" : ""}
+      try {
+        for (const stdio of [['ignore'], Object.freeze(['ignore'])]) {
+          const child=node.spawn(process.execPath,['-e',''],{stdio});
+          assert.equal((await once(child,'close'))[0],0);
+          assert.deepEqual(stdio,['ignore']);
+        }
+      } finally {p.close();}
+    `);
+  });
+
   test(`${mode} nodes run children with progress removed`, async () => {
     const { stdout } = await run(`
       const p=new Progress({disabled:${mode === "disabled"},refreshInterval:null});
@@ -326,16 +341,21 @@ test("local tasks take priority when a child tree exceeds capacity", async () =>
   const { frames } = await run(`
     const p=new Progress({name:'parent',refreshInterval:null});
     const task=p.root.start('child');
-    const nodes=Array.from({length:250},(_,i)=>p.root.start('local'+i));
+    const nodes=Array.from({length:251},(_,i)=>p.root.start('local'+i));
     const child=task.fork(new URL(${JSON.stringify(worker)}));
     assert.equal((await once(child,'close'))[0],0);p.flush();
     nodes[0].end();p.close();
   `);
   assert.equal(frames[0].length, 253);
   assert.equal(frames[0][1].name, "worker");
-  assert.equal(frames[0].at(-1).name, "leaf");
-  assert.equal(frames[0].at(-1).parent, 1);
-  assert.equal(frames[1].length, 252);
+  assert.equal(frames[0].at(-1).name, "local250");
+  assert.equal(
+    frames[0].some((node) => node.name === "leaf"),
+    false,
+  );
+  assert.equal(frames[1].length, 253);
+  assert.equal(frames[1].at(-1).name, "leaf");
+  assert.equal(frames[1].at(-1).parent, 1);
 });
 
 test("explicit undefined args preserve third-argument options", async () => {

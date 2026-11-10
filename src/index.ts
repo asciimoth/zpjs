@@ -216,7 +216,11 @@ export class Progress {
         continue;
       env[key] = sourceEnv[key];
     }
-    if (!active) return launch({ ...options, env });
+    if (!active) {
+      // Node fills short stdio arrays in place, even without a progress pipe.
+      if (Array.isArray(options.stdio)) options.stdio = [...options.stdio];
+      return launch({ ...options, env });
+    }
     const stdio = childStdio(
       options.stdio,
       isFork,
