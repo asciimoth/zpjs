@@ -37,7 +37,7 @@ See Andrew Kelley's [Zig progress protocol specification][protocol] for the
 protocol design. For clients in other languages, see [`zppy`][zppy] for
 Python, [`zpgo`][zpgo] for Go, and [`zprs`][zprs] for Rust.
 
-![zpg displaying a task tree](https://raw.githubusercontent.com/asciimoth/zpg/master/demo.gif)
+![zpg displaying a task tree](https://vhs.charm.sh/vhs-5OKsqixxKTapPmjdIv2Qhf.gif)
 
 ## Library usage
 
